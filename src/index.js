@@ -30,7 +30,7 @@ function fileIncludePlugin(options = {}) {
       if (id.endsWith(".html")) {
         return processIncludes(
           code,
-          path.dirname(id),
+          baseDir,
           includePattern,
           loopPattern,
           ifPattern,
@@ -122,7 +122,7 @@ function processIncludesWithPattern(
         includePattern,
         loopPattern,
         ifPattern,
-        context,
+        { ...context, ...data },
         customFunctions
       );
     } catch (error) {
@@ -164,7 +164,7 @@ function processLoops(content, dir, loopPattern, context, customFunctions) {
     try {
       let loopTemplate = fs.readFileSync(loopPath, "utf-8");
       return dataArray
-        .map((data) => injectData(loopTemplate, data, customFunctions))
+        .map((data) => injectData(loopTemplate, { ...context, ...data }, customFunctions))
         .join("");
     } catch (error) {
       console.error(`Failed to include file: ${loopPath}`);
@@ -244,3 +244,4 @@ function evaluateCondition(condition, context, customFunctions) {
 }
 
 export default fileIncludePlugin;
+
