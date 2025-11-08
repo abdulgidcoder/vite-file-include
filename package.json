@@ -17,7 +17,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/abdulgidcoder/vite-file-includ.git"
+    "url": "https://github.com/abdulgidcoder/vite-file-include.git"
   },
   "peerDependencies": {
     "vite": "^4.0.0"

@@ -108,7 +108,7 @@ The `@@if` directive allows conditional rendering based on an expression.
 ```html
 @@if(condition) {
   <!-- HTML content -->
-}
+};
 ```
 
 **Example:**
@@ -116,7 +116,7 @@ The `@@if` directive allows conditional rendering based on an expression.
 ```html
 @@if(name === 'John') {
   <p>Welcome, John!</p>
-}
+};
 ```
 
 ## Custom Functions
@@ -163,7 +163,7 @@ Below is an example of how you might structure your HTML files using the plugin'
 
   @@if(showFooter) {
     @@include('footer.html');
-  }
+  };
 </body>
 </html>
 ```
@@ -205,7 +205,3 @@ Below is an example of how you might structure your HTML files using the plugin'
 ## Error Handling
 
 If there is an error parsing JSON data or including a file, the plugin will log a detailed error message to the console. This helps in debugging while ensuring that your build process continues without interruption.
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for more details.
