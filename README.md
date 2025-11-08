@@ -1,207 +1,228 @@
-# vite-file-include
+# vite-file-include 🔗
 
-`vite-file-include` is an advanced Vite plugin designed to facilitate the inclusion of external HTML files, looping through data, and conditional rendering within your HTML files. It is particularly useful for managing repetitive HTML structures in static sites or templating environments.
+`vite-file-include` is a modern **Vite plugin** for HTML templating that supports **file inclusion**, **looping**, **conditional rendering**, and **live hot-reload** without reloading the full page.  
+It’s ideal for managing repetitive HTML structures in static sites or prototyping environments.
 
-## Features
+---
 
-- File inclusion with support for nested includes
-- Looping through data arrays or JSON files
-- Conditional rendering 
-- Custom function support for advanced templating
-- Evaluate JavaScript expressions directly in your templates.
-- Asynchronous file processing
-- Enhanced error handling and debugging
+## 🚀 Features
 
+- 🧩 **Nested file includes** with variable support  
+- 🔁 **Loop rendering** for data arrays and JSON files  
+- ⚙️ **Conditional blocks** using inline JavaScript  
+- 🧠 **Custom helper functions** for advanced templating  
+- ⚡ **JavaScript expression evaluation** inside templates  
+- 🔄 **Hot reload support** — live updates without full page refresh  
+- 🧵 **Async file processing** and better performance  
+- 🪶 **Enhanced error reporting** with context hints
 
-## Installation
+---
 
-Install the plugin via npm:
+## 📦 Installation
 
 ```bash
-npm install vite-file-include
+npm install vite-file-include --save-dev
 ```
 
-## Configuration
+---
 
-To use the plugin, import and configure it in your `vite.config.js`:
+## ⚙️ Configuration
 
-```javascript
-import fileIncludePlugin from 'vite-file-include';
+Add the plugin to your `vite.config.js`:
 
-export default {
+```js
+import { defineConfig } from 'vite'
+import fileIncludePlugin from 'vite-file-include'
+
+export default defineConfig({
   plugins: [
     fileIncludePlugin({
       includePattern: "@@include",
       loopPattern: "@@loop",
       ifPattern: "@@if",
       baseDir: process.cwd(),
-      context: {}, 
-      customFunctions: {},
-    }),
-  ],
-};
+      context: {
+        siteName: 'My Static Site'
+      },
+      customFunctions: {
+        uppercase: (str) => str.toUpperCase(),
+        currentYear: () => new Date().getFullYear()
+      }
+    })
+  ]
+})
 ```
 
-### Plugin Options
+---
 
-- `includePattern` (default: `@@include`): The pattern used to include external HTML files.
-- `loopPattern` (default: `@@loop`): The pattern used to loop through data arrays.
-- `ifPattern` (default: `@@if`): The pattern used to conditionally render content.
-- `baseDir` (default: `process.cwd()`): The base directory for resolving paths.
-- `context` (default: `{}`): An object containing global variables that can be used in includes, loops, and conditionals.
-- `customFunctions` (default: {}): An object containing custom functions that can be used in your templates.
+## 🧩 Plugin Options
 
-## Directives
+| Option | Type | Default | Description |
+|--------|------|----------|-------------|
+| **`includePattern`** | `string` | `@@include` | Directive for including files |
+| **`loopPattern`** | `string` | `@@loop` | Directive for looping over arrays/JSON |
+| **`ifPattern`** | `string` | `@@if` | Directive for conditional rendering |
+| **`baseDir`** | `string` | `process.cwd()` | Base directory for resolving paths |
+| **`context`** | `object` | `{}` | Global variables accessible in templates |
+| **`customFunctions`** | `object` | `{}` | Custom functions available in templates |
 
-### `@@include`
+---
 
-The `@@include` directive allows you to include the content of another HTML file within your main file.
+## 🧱 Directives
 
-**Syntax:**
+### 🔹 `@@include`
+
+Include another HTML file into your main file.
 
 ```html
-@@include('path/to/file.html');
+@@include('partials/header.html')
 ```
 
-**With Data:**
+With data:
 
 ```html
-@@include('path/to/file.html', { "key": "value" });
+@@include('partials/header.html', { "title": "Home Page" })
 ```
 
-**Example** (`file.html`):
+**Example** (`partials/header.html`):
 
 ```html
-<div>{{ key }}</div>
+<header>
+  <h1>{{ title }}</h1>
+</header>
 ```
 
-### `@@loop`
+---
 
-The `@@loop` directive enables you to repeat a block of HTML for each item in a data array or JSON file.
+### 🔹 `@@loop`
 
-**Syntax:**
+Repeat an HTML block for each item in a data array or JSON file.
 
 ```html
-@@loop('path/to/template.html', 'data.json');
+@@loop('partials/article.html', 'data/articles.json')
 ```
 
-**With Inline Data:**
+Or inline data:
 
 ```html
-@@loop('path/to/template.html', [{ "key": "value" }, { "key": "another value" }]);
+@@loop('partials/article.html', [
+  { "title": "Article 1" },
+  { "title": "Article 2" }
+])
 ```
 
-**Example Template** (`template.html`):
+**Example** (`partials/article.html`):
 
 ```html
 <article>
-  <h2>{{ key }}</h2>
+  <h2>{{ title }}</h2>
 </article>
 ```
 
-### `@@if`
+---
 
-The `@@if` directive allows conditional rendering based on an expression.
+### 🔹 `@@if`
 
-**Syntax:**
+Conditionally render content based on an expression.
 
 ```html
-@@if(condition) {
-  <!-- HTML content -->
+@@if(showFooter) {
+  @@include('partials/footer.html')
 };
 ```
 
 **Example:**
 
 ```html
-@@if(name === 'John') {
-  <p>Welcome, John!</p>
+@@if(user.isLoggedIn) {
+  <p>Welcome, {{ user.name }}</p>
 };
 ```
 
-## Custom Functions
+---
 
-You can define custom functions to use in your templates. These functions are passed to the plugin through the `customFunctions` option:
+## 🧮 JavaScript Expressions
 
-```javascript
-fileIncludePlugin({
-  customFunctions: {
-    uppercase: (str) => str.toUpperCase(),
-    currentYear: () => new Date().getFullYear()
-  }
-})
-```
-
-You can then use these functions in your templates:
+Use JS directly inside templates:
 
 ```html
-<p>{{ uppercase(name) }}</p>
+<p>Year: {{ new Date().getFullYear() }}</p>
+<p>Uppercase: {{ 'vite'.toUpperCase() }}</p>
+```
+
+---
+
+## 🧰 Custom Functions
+
+Define reusable helpers in your config:
+
+```js
+customFunctions: {
+  uppercase: (str) => str.toUpperCase(),
+  currentYear: () => new Date().getFullYear(),
+}
+```
+
+Usage:
+
+```html
+<h1>{{ uppercase(title) }}</h1>
 <footer>&copy; {{ currentYear() }}</footer>
 ```
 
+---
 
-## JavaScript Expressions
+## 🔄 Hot Reload
 
-You can use JavaScript expressions directly in your templates. For example:
+Unlike static include tools, `vite-file-include` supports **Vite’s HMR (Hot Module Replacement)**.
 
-```html 
-<p>Current Year: {{ new Date().getFullYear() }}</p>
-<p>Uppercase Text: {{ 'John'.toUpperCase() }}</p>
+- Changes to included files update **instantly** in the browser  
+- No full page reload  
+- Works seamlessly with Vite’s dev server  
+
+💡 Tip: Useful for quickly editing partials like headers, footers, and repeating components.
+
+---
+
+## 🧰 Example Project Structure
+
+```
+project/
+├─ index.html
+├─ partials/
+│  ├─ header.html
+│  ├─ footer.html
+│  └─ article.html
+├─ data/
+│  └─ articles.json
+└─ vite.config.js
 ```
 
-## Example Usage
-
-Below is an example of how you might structure your HTML files using the plugin's directives:
+**index.html**
 
 ```html
-<!-- main.html -->
 <html>
-<body>
-  @@include('header.html', { "title": "My Website" });
-
-  @@loop('partials/article.html', 'data/articles.json');
-
-  @@if(showFooter) {
-    @@include('footer.html');
-  };
-</body>
+  <body>
+    @@include('partials/header.html', { "title": "My Site" })
+    @@loop('partials/article.html', 'data/articles.json')
+    @@if(showFooter) { @@include('partials/footer.html') };
+  </body>
 </html>
 ```
 
-### Example Files
+---
 
-- `header.html`:
+## ⚠️ Error Handling
 
-```html
-<header>
-  <h1>{{ uppercase(title) }}</h1>
-</header>
-```
+The plugin provides detailed error messages for:
+- Missing include files  
+- Invalid JSON syntax  
+- Undefined variables  
 
-- `partials/article.html`:
+Each error logs file path and directive line for easier debugging.
 
-```html
-<article>
-  <h2>{{ title }}</h2>
-  <p>{{ content }}</p>
-</article>
-```
+---
 
-- `data/articles.json`:
+## 📄 License
 
-```json
-[
-  {
-    "title": "Article 1",
-    "content": "Content of the first article."
-  },
-  {
-    "title": "Article 2",
-    "content": "Content of the second article."
-  }
-]
-```
-
-## Error Handling
-
-If there is an error parsing JSON data or including a file, the plugin will log a detailed error message to the console. This helps in debugging while ensuring that your build process continues without interruption.
+MIT © 2025

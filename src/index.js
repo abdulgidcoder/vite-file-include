@@ -11,6 +11,16 @@ function fileIncludePlugin(options = {}) {
     customFunctions = {},
   } = options;
 
+  // Cache for file reads
+  const fileCache = new Map();
+
+  const readFileCached = (filePath) => {
+    if (!fileCache.has(filePath)) {
+      fileCache.set(filePath, fs.readFileSync(filePath, "utf-8"));
+    }
+    return fileCache.get(filePath);
+  };
+
   return {
     name: "vite-plugin-file-include",
 
@@ -22,34 +32,63 @@ function fileIncludePlugin(options = {}) {
         loopPattern,
         ifPattern,
         context,
-        customFunctions
+        customFunctions,
+        new Set(),
+        readFileCached
       );
     },
 
     transform(code, id) {
       if (id.endsWith(".html")) {
-        return processIncludes(
-          code,
-          baseDir,
-          includePattern,
-          loopPattern,
-          ifPattern,
-          context,
-          customFunctions
-        );
+        return {
+          code: processIncludes(
+            code,
+            baseDir,
+            includePattern,
+            loopPattern,
+            ifPattern,
+            context,
+            customFunctions,
+            new Set(),
+            readFileCached
+          ),
+        };
       }
-      return code;
+      return { code };
     },
 
-    handleHotUpdate({ file, server }) {
+    handleHotUpdate({ file, server, modules }) {
       if (file.endsWith(".html")) {
-        server.ws.send({
-          type: "full-reload",
-        });
+        const mod = modules.find((m) => m.file && m.file.endsWith(".html"));
+
+        if (mod) {
+          server.moduleGraph.invalidateModule(mod);
+          server.ws.send({
+            type: "update",
+            updates: [
+              {
+                type: "js-update",
+                path: mod.url,
+                acceptedPath: mod.url,
+                timestamp: Date.now(),
+              },
+            ],
+          });
+        } else {
+          server.ws.send({
+            type: "custom",
+            event: "vite-file-include:update",
+            data: { file },
+          });
+        }
+
+        return [];
       }
     },
   };
 }
+
+/* ---------------- Core Processing ---------------- */
 
 function processIncludes(
   content,
@@ -58,27 +97,47 @@ function processIncludes(
   loopPattern,
   ifPattern,
   context,
-  customFunctions
+  customFunctions,
+  visited,
+  readFileCached
 ) {
-  content = processIncludesWithPattern(
-    content,
-    dir,
-    includePattern,
-    loopPattern,
-    ifPattern,
-    context,
-    customFunctions
-  );
-  content = processLoops(content, dir, loopPattern, context, customFunctions);
-  content = processConditionals(
-    content,
-    dir,
-    ifPattern,
-    includePattern,
-    loopPattern,
-    context,
-    customFunctions
-  );
+  let lastContent;
+  do {
+    lastContent = content;
+    content = processIncludesWithPattern(
+      content,
+      dir,
+      includePattern,
+      loopPattern,
+      ifPattern,
+      context,
+      customFunctions,
+      visited,
+      readFileCached
+    );
+    content = processLoops(
+      content,
+      dir,
+      loopPattern,
+      context,
+      customFunctions,
+      includePattern,
+      ifPattern,
+      visited,
+      readFileCached
+    );
+    content = processConditionals(
+      content,
+      dir,
+      ifPattern,
+      includePattern,
+      loopPattern,
+      context,
+      customFunctions,
+      visited,
+      readFileCached
+    );
+  } while (content !== lastContent);
 
   return content;
 }
@@ -90,27 +149,34 @@ function processIncludesWithPattern(
   loopPattern,
   ifPattern,
   context,
-  customFunctions
+  customFunctions,
+  visited,
+  readFileCached
 ) {
   const regex = new RegExp(
-    `${includePattern}\\(\\s*['"](.+?)['"]\\s*,?\\s*({[\\s\\S]*?})?\\s*\\);`,
+    `${includePattern}\\(\\s*['"]([^'"]+)['"]\\s*(?:,\\s*({[\\s\\S]*?}))?\\s*\\)\\s*;?`,
     "g"
   );
 
   return content.replace(regex, (match, filePath, jsonData) => {
     const includePath = path.resolve(dir, filePath);
-    let data = {};
+    if (visited.has(includePath)) {
+      console.warn(`⚠️ Circular include detected: ${includePath}`);
+      return "";
+    }
+    visited.add(includePath);
 
+    let data = {};
     if (jsonData) {
       try {
         data = JSON.parse(jsonData);
-      } catch (error) {
+      } catch {
         console.error(`Failed to parse JSON data: ${jsonData}`);
       }
     }
 
     try {
-      let includedContent = fs.readFileSync(includePath, "utf-8");
+      let includedContent = readFileCached(includePath);
       includedContent = injectData(
         includedContent,
         { ...context, ...data },
@@ -123,18 +189,30 @@ function processIncludesWithPattern(
         loopPattern,
         ifPattern,
         { ...context, ...data },
-        customFunctions
+        customFunctions,
+        visited,
+        readFileCached
       );
-    } catch (error) {
+    } catch (err) {
       console.error(`Failed to include file: ${includePath}`);
       return "";
     }
   });
 }
 
-function processLoops(content, dir, loopPattern, context, customFunctions) {
+function processLoops(
+  content,
+  dir,
+  loopPattern,
+  context,
+  customFunctions,
+  includePattern,
+  ifPattern,
+  visited,
+  readFileCached
+) {
   const regex = new RegExp(
-    `${loopPattern}\\(\\s*['"](.+?)['"]\\s*,\\s*(\\[[\\s\\S]*?\\]|['"](.+?)['"])\\s*\\);`,
+    `${loopPattern}\\(\\s*['"]([^'"]+)['"]\\s*,\\s*(\\[[\\s\\S]*?\\]|['"][^'"]+['"])\\s*\\)\\s*;?`,
     "g"
   );
 
@@ -143,31 +221,46 @@ function processLoops(content, dir, loopPattern, context, customFunctions) {
     let dataArray = [];
 
     try {
-      if (
-        jsonArrayOrFilePath.startsWith("[") ||
-        jsonArrayOrFilePath.startsWith("{")
-      ) {
+      if (jsonArrayOrFilePath.trim().startsWith("[")) {
         dataArray = JSON.parse(jsonArrayOrFilePath);
       } else {
         const jsonFilePath = path.resolve(
           dir,
           jsonArrayOrFilePath.replace(/['"]/g, "")
         );
-        const jsonData = fs.readFileSync(jsonFilePath, "utf-8");
+        const jsonData = readFileCached(jsonFilePath);
         dataArray = JSON.parse(jsonData);
       }
     } catch (error) {
-      console.error(`Failed to parse JSON: ${jsonArrayOrFilePath}`);
-      console.error(error);
+      console.error(`Failed to parse loop JSON: ${jsonArrayOrFilePath}`);
+      return "";
     }
 
     try {
-      let loopTemplate = fs.readFileSync(loopPath, "utf-8");
+      let loopTemplate = readFileCached(loopPath);
       return dataArray
-        .map((data) => injectData(loopTemplate, { ...context, ...data }, customFunctions))
+        .map((data) => {
+          const mergedContext = { ...context, ...data };
+          const loopContent = injectData(
+            loopTemplate,
+            mergedContext,
+            customFunctions
+          );
+          return processIncludes(
+            loopContent,
+            dir,
+            includePattern,
+            loopPattern,
+            ifPattern,
+            mergedContext,
+            customFunctions,
+            visited,
+            readFileCached
+          );
+        })
         .join("");
     } catch (error) {
-      console.error(`Failed to include file: ${loopPath}`);
+      console.error(`Failed to include loop file: ${loopPath}`);
       return "";
     }
   });
@@ -180,10 +273,12 @@ function processConditionals(
   includePattern,
   loopPattern,
   context,
-  customFunctions
+  customFunctions,
+  visited,
+  readFileCached
 ) {
   const regex = new RegExp(
-    `${ifPattern}\\s*\\(([^)]+)\\)\\s*{([\\s\\S]*?)};\\s*`,
+    `${ifPattern}\\s*\\(([^)]+)\\)\\s*{([\\s\\S]*?)};?`,
     "g"
   );
 
@@ -192,21 +287,45 @@ function processConditionals(
       const result = evaluateCondition(condition, context, customFunctions);
 
       if (result) {
-        return processIncludesWithPattern(
+        let processed = processIncludesWithPattern(
           body.trim(),
           dir,
           includePattern,
           loopPattern,
           ifPattern,
           context,
-          customFunctions
+          customFunctions,
+          visited,
+          readFileCached
         );
+        processed = processLoops(
+          processed,
+          dir,
+          loopPattern,
+          context,
+          customFunctions,
+          includePattern,
+          ifPattern,
+          visited,
+          readFileCached
+        );
+        processed = processConditionals(
+          processed,
+          dir,
+          ifPattern,
+          includePattern,
+          loopPattern,
+          context,
+          customFunctions,
+          visited,
+          readFileCached
+        );
+        return processed;
       }
 
       return "";
     } catch (error) {
       console.error(`Failed to evaluate condition: ${condition}`);
-      console.error(error);
       return "";
     }
   });
@@ -217,31 +336,22 @@ function injectData(content, data, customFunctions = {}) {
     try {
       const result = evaluateExpression(expression, data, customFunctions);
       return result !== undefined ? result : match;
-    } catch (error) {
-      console.error(`Failed to evaluate expression: ${expression}`);
-      console.error(error);
+    } catch {
       return match;
     }
   });
 }
 
 function evaluateExpression(expression, data, customFunctions) {
-  // Bind custom functions to the evaluation context
   const context = { ...data, ...customFunctions };
-  return new Function(
-    "context",
-    "with (context) { return " + expression + "; }"
-  )(context);
+  return new Function("context", `with (context) { return ${expression}; }`)(
+    context
+  );
 }
 
 function evaluateCondition(condition, context, customFunctions) {
-  // Bind custom functions to the evaluation context
-  const contextWithFunctions = { ...context, ...customFunctions };
-  return new Function(
-    "context",
-    "with (context) { return " + condition + "; }"
-  )(contextWithFunctions);
+  const ctx = { ...context, ...customFunctions };
+  return new Function("context", `with (context) { return ${condition}; }`)(ctx);
 }
 
 export default fileIncludePlugin;
-
