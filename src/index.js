@@ -120,7 +120,9 @@ class FileIncludeProcessor {
       return "";
     }
 
-    visited.add(includePath);
+    // Create a new set for this branch of the tree
+    const nextVisited = new Set(visited);
+    nextVisited.add(includePath);
 
     const data = jsonData ? this.parseJSON(jsonData, 'include data') : {};
     const fileContent = this.readFile(includePath);
@@ -134,7 +136,7 @@ class FileIncludeProcessor {
     return this.process(
       processedContent,
       path.dirname(includePath),
-      visited,
+      nextVisited,
       newContext
     );
   }
@@ -162,7 +164,9 @@ class FileIncludeProcessor {
         };
 
         const loopContent = this.injectData(loopTemplate, loopContext);
-        return this.process(loopContent, dir, visited, loopContext);
+        const loopVisited = new Set(visited);
+        loopVisited.add(loopPath);
+        return this.process(loopContent, dir, loopVisited, loopContext);
       })
       .join("");
   }
