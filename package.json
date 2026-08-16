@@ -1,6 +1,6 @@
 {
   "name": "vite-file-include",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "A Vite plugin for file inclusion, loops, and conditionals in HTML files with hot reload support.",
   "main": "src/index.js",
   "type": "module",
